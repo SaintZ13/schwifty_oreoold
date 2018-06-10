@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -610,21 +610,6 @@ end:
 	} else {
 		if (enable_chan_stats)
 			wlan_hdd_dsrc_config_radio_chan_stats(adapter, true);
-
-		/*
-		 * Net device mtu size is 1500 by default, But for OCB RAW mode,
-		 * driver need later convert 802.3 data header to IEEE802.11
-		 * data header and EPD header, which will increase total frame
-		 * length. In such case, long packet length will exceed the
-		 * target credit size. It resulted in that the packet is cut
-		 * down, data would be missed and the traffic would be broken.
-		 * So decrease the netdev mtu size to work around this issue
-		 * in IEEE80211p RAW mode.
-		 */
-		if (config->flags & OCB_CONFIG_FLAG_80211_FRAME_MODE)
-			adapter->dev->mtu = ETH_DATA_LEN - 8;
-		else
-			adapter->dev->mtu = ETH_DATA_LEN;
 	}
 	return rc;
 }
@@ -1013,10 +998,18 @@ static int __wlan_hdd_cfg80211_ocb_set_config(struct wiphy *wiphy,
 		tb[QCA_WLAN_VENDOR_ATTR_OCB_SET_CONFIG_SCHEDULE_SIZE]);
 
 	/* Get the ndl chan array and the ndl active state array. */
+	if (!tb[QCA_WLAN_VENDOR_ATTR_OCB_SET_CONFIG_NDL_CHANNEL_ARRAY]) {
+		hddLog(LOGE, FL("NDL_CHANNEL_ARRAY is not present"));
+		return -EINVAL;
+	}
 	ndl_chan_list =
 		tb[QCA_WLAN_VENDOR_ATTR_OCB_SET_CONFIG_NDL_CHANNEL_ARRAY];
 	ndl_chan_list_len = (ndl_chan_list ? nla_len(ndl_chan_list) : 0);
 
+	if (!tb[QCA_WLAN_VENDOR_ATTR_OCB_SET_CONFIG_NDL_ACTIVE_STATE_ARRAY]) {
+		hddLog(LOGE, FL("NDL_ACTIVE_STATE_ARRAY is not present"));
+		return -EINVAL;
+	}
 	ndl_active_state_list =
 		tb[QCA_WLAN_VENDOR_ATTR_OCB_SET_CONFIG_NDL_ACTIVE_STATE_ARRAY];
 	ndl_active_state_list_len = (ndl_active_state_list ?

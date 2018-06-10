@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -3040,6 +3040,7 @@ typedef struct sSirSmePreSwitchChannelInd
     tANI_U8   sessionId;
 } tSirSmePreSwitchChannelInd, *tpSirSmePreSwitchChannelInd;
 
+
 //
 // HDD -> LIM
 // tSirMsgQ.type = eWNI_SME_DEL_BA_PEER_IND
@@ -3186,10 +3187,6 @@ typedef struct sSmeCsaOffloadInd
     tANI_U16    mesgType;    // eWNI_SME_CSA_OFFLOAD_EVENT
     tANI_U16    mesgLen;
     tSirMacAddr bssId;       // BSSID
-#ifdef WLAN_FEATURE_SAP_TO_FOLLOW_STA_CHAN
-    tANI_U16    channel;
-    tANI_U16    tbtt_count;
-#endif//#ifdef WLAN_FEATURE_SAP_TO_FOLLOW_STA_CHAN
 } tSmeCsaOffloadInd, *tpSmeCsaOffloadInd;
 
 /// WOW related structures
@@ -5263,9 +5260,6 @@ typedef struct sSirDfsCsaIeRequest
     uint8_t  ch_switch_mode;
     uint8_t  dfs_ch_switch_disable;
     uint8_t  sub20_switch_mode;
-#ifdef WLAN_FEATURE_SAP_TO_FOLLOW_STA_CHAN
-    tANI_U8  csaSwitchCount;
-#endif//#ifdef WLAN_FEATURE_SAP_TO_FOLLOW_STA_CHAN
 }tSirDfsCsaIeRequest, *tpSirDfsCsaIeRequest;
 
 /* Indication from lower layer indicating the completion of first beacon send
@@ -5309,24 +5303,7 @@ typedef struct{
     u_int8_t thermalMgmtEnabled;
     u_int32_t throttlePeriod;
     u_int8_t throttle_duty_cycle_tbl[WLAN_THROTTLE_DUTY_CYCLE_LEVEL_MAX];
-#ifdef FEATURE_WLAN_THERMAL_SHUTDOWN
-    uint8_t  thermal_shutdown_enabled;
-    uint8_t  thermal_shutdown_auto_enabled;
-    uint16_t thermal_resume_threshold;
-    uint16_t thermal_warning_threshold;
-    uint16_t thermal_suspend_threshold;
-    uint16_t thermal_sample_rate;
-#endif
-
 } t_thermal_mgmt, *tp_thermal_mgmt;
-
-typedef struct{
-    u_int32_t dpd_enable;
-    u_int32_t dpd_delta_degreeHigh;
-    u_int32_t dpd_delta_degreeLow;
-    u_int32_t dpd_cooling_time;
-    u_int32_t dpd_duration_max;
-} t_dpd_recal_mgmt, *tp_dpd_recal_mgmt;
 
 typedef struct sSirTxPowerLimit
 {
@@ -6698,16 +6675,6 @@ struct sir_wifi_ll_ext_peer_stats {
 };
 
 /**
- * struct sir_wifi_ll_ext_time_stamp - time stamp for stats report
- * @duration: the count duration on fw side for this report
- * @end_time: timestamp when LL stats reported to user layer
- */
-struct sir_wifi_ll_ext_period {
-	uint32_t duration;
-	v_TIME_t end_time;
-};
-
-/**
  * struct sir_wifi_ll_ext_stats - link layer stats report
  * @trigger_cond_id:  Indicate what triggered this event.
  *	1: timeout. 2: threshold
@@ -6746,8 +6713,6 @@ struct sir_wifi_ll_ext_period {
  *     |      peer_num                 |
  *     +-------------------------------+
  *     |      channel_num              |
- *     +-------------------------------+
- *     |      time stamp               |
  *     +-------------------------------+
  *     |      tx_mpdu_aggr_array_len   |
  *     +-------------------------------+
@@ -6802,7 +6767,6 @@ struct sir_wifi_ll_ext_stats {
 	uint32_t rx_chgd_bitmap;
 	uint8_t peer_num;
 	uint8_t channel_num;
-	struct sir_wifi_ll_ext_period time_stamp;
 	uint32_t tx_mpdu_aggr_array_len;
 	uint32_t tx_succ_mcs_array_len;
 	uint32_t tx_fail_mcs_array_len;
@@ -7277,11 +7241,6 @@ struct sir_ocb_config {
 	void *def_tx_param;
 	uint32_t def_tx_param_size;
 };
-
-/* Flag to indicate expiry time in TSF. */
-#define OCB_CONFIG_FLAG_EXPIRY_TIME_IN_TSF (0x01)
-/* Flag to indicate 802.11 frame mode. */
-#define OCB_CONFIG_FLAG_80211_FRAME_MODE   (0x02)
 
 /* The size of the utc time in bytes. */
 #define SIZE_UTC_TIME (10)
@@ -8559,20 +8518,6 @@ struct sme_sub20_chan_width {
 	uint16_t	length;
 	uint8_t	session_id;
 	uint8_t	channelwidth;
-};
-
-/**
- * struct sme_change_country_code_ind - indicate country code changed
- * @message_type: message Type is eWNI_SME_CC_CHANGE_IND.
- * @msg_len: message length.
- * @session_id: session Id.
- * @country_code: country code information.
- */
-struct sme_change_country_code_ind {
-	uint16_t  message_type;
-	uint16_t  msg_len;
-	uint8_t   session_id;
-	uint8_t   country_code[WNI_CFG_COUNTRY_CODE_LEN];
 };
 
 /**
