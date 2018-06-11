@@ -1,7 +1,7 @@
 export KBUILD_BUILD_USER=SaintZ93
 export KBUILD_BUILD_HOST=hidden
 export ARCH=arm64
-export CROSS_COMPILE=$HOME/schwifty/prebuilts/gcc-prebuilts/bin/aarch64-linaro-linux-android-
+export CROSS_COMPILE=$HOME/schwifty/prebuilts/gcc-prebuilts/bin/aarch64-linux-gnu-
 
 DIR=$(pwd)
 BUILD="$DIR/build"
