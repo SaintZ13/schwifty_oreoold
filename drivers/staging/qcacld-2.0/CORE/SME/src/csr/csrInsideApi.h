@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2016 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -62,6 +62,9 @@
 #define CSR_MIN_REST_TIME_CONC                  50
 
 #define CSR_IDLE_TIME_CONC                      25
+
+#define CSR_NUM_STA_CHAN_COMBINED_CONC      3
+#define CSR_NUM_P2P_CHAN_COMBINED_CONC      1
 #endif
 
 #define CSR_MAX_NUM_SUPPORTED_CHANNELS 55
@@ -86,6 +89,7 @@
 #define CSR_SCAN_GET_RESULT_INTERVAL    (5 * VOS_TIMER_TO_SEC_UNIT)     //5 seconds
 #define CSR_MIC_ERROR_TIMEOUT  (60 * VOS_TIMER_TO_SEC_UNIT)     //60 seconds
 #define CSR_TKIP_COUNTER_MEASURE_TIMEOUT  (60 * VOS_TIMER_TO_SEC_UNIT)     //60 seconds
+#define CSR_SCAN_RESULT_CFG_AGING_INTERVAL    (VOS_TIMER_TO_SEC_UNIT)     // 1  second
 //the following defines are NOT used by palTimer
 #define CSR_SCAN_AGING_TIME_NOT_CONNECT_NO_PS 50     //50 seconds
 #define CSR_SCAN_AGING_TIME_NOT_CONNECT_W_PS 300     //300 seconds
@@ -178,17 +182,16 @@ typedef struct tagCsrScanResult
        we have equal preferValue */
     tANI_U32 capValue;
 
+    /*
+     * This member must be the last in the structure because the end of
+     * tSirBssDescription (inside) is an array with non known size at this time
+     */
+
     eCsrEncryptionType ucEncryptionType; //Preferred Encryption type that matched with profile.
     eCsrEncryptionType mcEncryptionType;
     eCsrAuthType authType; //Preferred auth type that matched with the profile.
 
     tCsrScanResultInfo Result;
-    /*
-     * WARNING - Do not add any element here
-     * This member Result must be the last in the structure because the end
-     * of tSirBssDescription (inside) is an array with nonknown size at
-     * this time.
-     */
 }tCsrScanResult;
 
 typedef struct
@@ -197,19 +200,8 @@ typedef struct
     tListElem *pCurEntry;
 }tScanResultList;
 
-/**
- * csr_scan_for_ssid_context() - Callback context for SSID scan
- *
- * @pMac: pMac handle
- * @sessionId: scan session id
- * @roamId: roam Id
- */
-struct csr_scan_for_ssid_context
-{
-    tpAniSirGlobal pMac;
-    tANI_U32 sessionId;
-    tANI_U32 roamId;
-};
+
+
 
 #define CSR_IS_ROAM_REASON( pCmd, reason ) ( (reason) == (pCmd)->roamCmd.roamReason )
 #define CSR_IS_BETTER_PREFER_VALUE(v1, v2)   ((v1) > (v2))
@@ -220,16 +212,6 @@ struct csr_scan_for_ssid_context
 #define CSR_IS_ENC_TYPE_STATIC( encType ) ( ( eCSR_ENCRYPT_TYPE_NONE == (encType) ) || \
                                             ( eCSR_ENCRYPT_TYPE_WEP40_STATICKEY == (encType) ) || \
                                             ( eCSR_ENCRYPT_TYPE_WEP104_STATICKEY == (encType) ) )
-#ifdef WLAN_FEATURE_FILS_SK
-#define CSR_IS_AUTH_TYPE_FILS(auth_type) \
-                ((eCSR_AUTH_TYPE_FILS_SHA256 == auth_type) || \
-                (eCSR_AUTH_TYPE_FILS_SHA384 == auth_type) || \
-                (eCSR_AUTH_TYPE_FT_FILS_SHA256 == auth_type) || \
-                (eCSR_AUTH_TYPE_FT_FILS_SHA384 == auth_type))
-#else
-#define CSR_IS_AUTH_TYPE_FILS(auth_type) 0
-#endif
-
 #define CSR_IS_WAIT_FOR_KEY( pMac, sessionId ) ( CSR_IS_ROAM_JOINED( pMac, sessionId ) && CSR_IS_ROAM_SUBSTATE_WAITFORKEY( pMac, sessionId ) )
 //WIFI has a test case for not using HT rates with TKIP as encryption
 //We may need to add WEP but for now, TKIP only.
@@ -301,6 +283,8 @@ eHalStatus csrScanForSSID(tpAniSirGlobal pMac, tANI_U32 sessionId, tCsrRoamProfi
 eHalStatus csrScanForCapabilityChange(tpAniSirGlobal pMac, tSirSmeApNewCaps *pNewCaps);
 eHalStatus csrScanStartGetResultTimer(tpAniSirGlobal pMac);
 eHalStatus csrScanStopGetResultTimer(tpAniSirGlobal pMac);
+eHalStatus csrScanStartResultCfgAgingTimer(tpAniSirGlobal pMac);
+eHalStatus csrScanStopResultCfgAgingTimer(tpAniSirGlobal pMac);
 eHalStatus csrScanBGScanEnable(tpAniSirGlobal pMac);
 eHalStatus csrScanStartIdleScanTimer(tpAniSirGlobal pMac, tANI_U32 interval);
 eHalStatus csrScanStopIdleScanTimer(tpAniSirGlobal pMac);
@@ -1081,7 +1065,7 @@ eHalStatus csrScanCreateEntryInScanCache(tpAniSirGlobal pMac, tANI_U32 sessionId
 eHalStatus csrUpdateChannelList(tpAniSirGlobal pMac);
 eHalStatus csrRoamDelPMKIDfromCache(tpAniSirGlobal pMac,
                                     tANI_U32 sessionId,
-                                    tPmkidCacheInfo *pmksa,
+                                    const tANI_U8 *pBSSId,
                                     tANI_BOOLEAN flush_cache);
 
 tANI_BOOLEAN csrElectedCountryInfo(tpAniSirGlobal pMac);

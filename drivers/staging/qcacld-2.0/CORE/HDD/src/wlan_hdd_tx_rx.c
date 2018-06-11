@@ -43,8 +43,6 @@
 #include <wlan_hdd_tx_rx.h>
 #include <wlan_hdd_softap_tx_rx.h>
 #include <wlan_hdd_dp_utils.h>
-#include <wlan_hdd_tsf.h>
-
 #include <wlan_qct_tl.h>
 #include <linux/netdevice.h>
 #include <linux/skbuff.h>
@@ -54,7 +52,6 @@
 #include <linux/if_ether.h>
 #endif
 
-#include <linux/inetdevice.h>
 #include <wlan_hdd_p2p.h>
 #include <linux/wireless.h>
 #include <net/cfg80211.h>
@@ -177,17 +174,21 @@ void hdd_flush_ibss_tx_queues( hdd_adapter_t *pAdapter, v_U8_t STAId)
       list_for_each_safe(tmp, next, &pAdapter->wmm_tx_queue[i].anchor)
       {
          pktNode = list_entry(tmp, skb_list_node_t, anchor);
-         skb = pktNode->skb;
+         if (pktNode != NULL)
+         {
+            skb = pktNode->skb;
 
-         /* Get the STAId from data */
-         skbStaIdx = *(v_U8_t *)(((v_U8_t *)(skb->data)) - 1);
-         if (skbStaIdx == STAId) {
-            /* Data for STAId is freed along with the queue node */
+            /* Get the STAId from data */
+            skbStaIdx = *(v_U8_t *)(((v_U8_t *)(skb->data)) - 1);
+            if (skbStaIdx == STAId)
+            {
+               /* Data for STAId is freed along with the queue node */
 
-            list_del(tmp);
-            kfree_skb(skb);
+               list_del(tmp);
+               kfree_skb(skb);
 
-            pAdapter->wmm_tx_queue[i].count--;
+               pAdapter->wmm_tx_queue[i].count--;
+            }
          }
       }
 
@@ -231,7 +232,7 @@ void hdd_tx_resume_timer_expired_handler(void *adapter_context)
 
    hddLog(LOG1, FL("Enabling queues"));
    wlan_hdd_netif_queue_control(pAdapter, WLAN_WAKE_ALL_NETIF_QUEUE,
-            WLAN_DATA_FLOW_CONTROL);
+            WLAN_CONTROL_PATH);
    pAdapter->hdd_stats.hddTxRxStats.txflow_unpause_cnt++;
    pAdapter->hdd_stats.hddTxRxStats.is_txflow_paused = FALSE;
 
@@ -367,33 +368,6 @@ void hdd_drop_skb_list(hdd_adapter_t *adapter, struct sk_buff *skb,
 }
 
 /**
- * wlan_hdd_classify_pkt() - classify skb packet type.
- * @data: Pointer to skb
- *
- * This function classifies skb packet type.
- *
- * Return: none
- */
-void wlan_hdd_classify_pkt(struct sk_buff *skb)
-{
-	/* classify broadcast/multicast packet */
-	if (adf_nbuf_is_bcast_pkt(skb))
-		ADF_NBUF_SET_BCAST(skb);
-	else if (adf_nbuf_is_multicast_pkt(skb))
-		ADF_NBUF_SET_MCAST(skb);
-
-	/* classify eapol/arp/dhcp/wai packet */
-	if (adf_nbuf_is_eapol_pkt(skb))
-		ADF_NBUF_SET_EAPOL(skb);
-	else if (adf_nbuf_is_ipv4_arp_pkt(skb))
-		ADF_NBUF_SET_ARP(skb);
-	else if (adf_nbuf_is_dhcp_pkt(skb))
-		ADF_NBUF_SET_DHCP(skb);
-	else if (adf_nbuf_is_wai_pkt(skb))
-		ADF_NBUF_SET_WAPI(skb);
-}
-
-/**
  * hdd_get_transmit_sta_id() - function to retrieve station id to be used for
  * sending traffic towards a particular destination address. The destination
  * address can be unicast, multicast or broadcast
@@ -427,8 +401,6 @@ static void hdd_get_transmit_sta_id(hdd_adapter_t *adapter,
 		 */
 		if (mcbc_addr)
 			*station_id = IBSS_BROADCAST_STAID;
-	} else if (adapter->device_mode == WLAN_HDD_OCB) {
-		*station_id = sta_ctx->conn_info.staId[0];
 	} else if (adapter->device_mode == WLAN_HDD_NDI) {
 		/*
 		 * This check is necessary to make sure station id is not
@@ -441,6 +413,33 @@ static void hdd_get_transmit_sta_id(hdd_adapter_t *adapter,
            if (eConnectionState_Associated == sta_ctx->conn_info.connState)
 		*station_id = sta_ctx->conn_info.staId[0];
 	}
+}
+
+/**
+ * wlan_hdd_classify_pkt() - classify skb packet type.
+ * @data: Pointer to skb
+ *
+ * This function classifies skb packet type.
+ *
+ * Return: none
+ */
+void wlan_hdd_classify_pkt(struct sk_buff *skb)
+{
+	/* classify broadcast/multicast packet */
+	if (adf_nbuf_is_bcast_pkt(skb))
+		ADF_NBUF_SET_BCAST(skb);
+	else if (adf_nbuf_is_multicast_pkt(skb))
+		ADF_NBUF_SET_MCAST(skb);
+
+	/* classify eapol/arp/dhcp/wai packet */
+	if (adf_nbuf_is_eapol_pkt(skb))
+		ADF_NBUF_SET_EAPOL(skb);
+	else if (adf_nbuf_is_ipv4_arp_pkt(skb))
+		ADF_NBUF_SET_ARP(skb);
+	else if (adf_nbuf_is_dhcp_pkt(skb))
+		ADF_NBUF_SET_DHCP(skb);
+	else if (adf_nbuf_is_wai_pkt(skb))
+		ADF_NBUF_SET_WAPI(skb);
 }
 
 /**============================================================================
@@ -467,8 +466,8 @@ int __hdd_hard_start_xmit(struct sk_buff *skb, struct net_device *dev)
    void *vdev_handle = NULL, *vdev_temp;
    bool is_update_ac_stats = FALSE;
    v_MACADDR_t *pDestMacAddress = NULL;
-   hdd_context_t *hddCtxt = WLAN_HDD_GET_CTX(pAdapter);
 #ifdef QCA_PKT_PROTO_TRACE
+   hdd_context_t *hddCtxt = WLAN_HDD_GET_CTX(pAdapter);
    v_U8_t proto_type = 0;
 #endif /* QCA_PKT_PROTO_TRACE */
 
@@ -500,48 +499,14 @@ int __hdd_hard_start_xmit(struct sk_buff *skb, struct net_device *dev)
        pDestMacAddress = (v_MACADDR_t*)skb->data;
        STAId = HDD_WLAN_INVALID_STA_ID;
 
-       hdd_tsf_record_sk_for_skb(hddCtxt, skb);
-
-/*
-* The TCP TX throttling logic is changed a little after 3.19-rc1 kernel,
-* the TCP sending limit will be smaller, which will throttle the TCP packets
-* to the host driver. The TCP UP LINK throughput will drop heavily.
-* In order to fix this issue, need to orphan the socket buffer asap, which will
-* call skb's destructor to notify the TCP stack that the SKB buffer is
-* unowned. And then the TCP stack will pump more packets to host driver.
-*
-* The TX packets might be dropped for UDP case in the iperf testing.
-* So need to be protected by follow control.
-*/
-#ifdef QCA_LL_TX_FLOW_CT
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(3,19,0))
-       //remove if condition for improving SCC TCP TX KPI
-      //if (pAdapter->tx_flow_low_watermark > 0) {
-          skb_orphan(skb);
-     // }
-#endif
-#else
-      /*
-       * For PTP feature enabled system, need to orphan the socket buffer asap
-       * otherwise the latency will become unacceptable
-       */
-      if (hdd_cfg_is_ptp_opt_enable(hddCtxt))
-          skb_orphan(skb);
-#endif
-
-       /* use self peer directly in monitor mode */
-       if (VOS_MONITOR_MODE != vos_get_conparam()) {
-           hdd_get_transmit_sta_id(pAdapter, pDestMacAddress, &STAId);
-           if (STAId == HDD_WLAN_INVALID_STA_ID) {
-               hddLog(LOG1, "Invalid station id, transmit operation suspended");
-               goto drop_pkt;
-           }
-
-           vdev_temp = tlshim_peer_validity(hddCtxt->pvosContext, STAId);
-       } else {
-           vdev_temp =
-               tlshim_selfpeer_vdev(hddCtxt->pvosContext);
+       hdd_get_transmit_sta_id(pAdapter, pDestMacAddress, &STAId);
+       if (STAId == HDD_WLAN_INVALID_STA_ID) {
+           hddLog(LOGE, "Invalid station id, transmit operation suspended");
+           goto drop_pkt;
        }
+
+       vdev_temp = tlshim_peer_validity(
+                     (WLAN_HDD_GET_CTX(pAdapter))->pvosContext, STAId);
        if (!vdev_temp)
            goto drop_pkt;
 
@@ -550,10 +515,10 @@ int __hdd_hard_start_xmit(struct sk_buff *skb, struct net_device *dev)
 #ifdef QCA_LL_TX_FLOW_CT
        if ((pAdapter->hdd_stats.hddTxRxStats.is_txflow_paused != TRUE) &&
             VOS_FALSE ==
-              WLANTL_GetTxResource(hddCtxt->pvosContext,
-				   pAdapter->sessionId,
-				   pAdapter->tx_flow_low_watermark,
-				   pAdapter->tx_flow_high_watermark_offset)) {
+              WLANTL_GetTxResource((WLAN_HDD_GET_CTX(pAdapter))->pvosContext,
+                                    pAdapter->sessionId,
+                                    pAdapter->tx_flow_low_watermark,
+                                    pAdapter->tx_flow_high_watermark_offset)) {
            hddLog(LOG1, FL("Disabling queues"));
            wlan_hdd_netif_queue_control(pAdapter, WLAN_STOP_ALL_NETIF_QUEUE,
                     WLAN_DATA_FLOW_CONTROL);
@@ -723,7 +688,8 @@ drop_pkt:
    /*
     * TODO: Should we stop net queues when txrx returns non-NULL?.
     */
-   skb = WLANTL_SendSTA_DataFrame(hddCtxt->pvosContext, vdev_handle, list_head
+   skb = WLANTL_SendSTA_DataFrame((WLAN_HDD_GET_CTX(pAdapter))->pvosContext,
+                                   vdev_handle, list_head
 #ifdef QCA_PKT_PROTO_TRACE
                                  , proto_type
 #endif /* QCA_PKT_PROTO_TRACE */
@@ -735,11 +701,8 @@ drop_pkt:
         is_update_ac_stats = TRUE;
         goto drop_list;
    }
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,7,0))
-   netif_trans_update(dev);
-#else
+
    dev->trans_start = jiffies;
-#endif
    return NETDEV_TX_OK;
 
 drop_list:
@@ -880,12 +843,8 @@ static void __hdd_tx_timeout(struct net_device *dev)
    struct netdev_queue *txq;
    int i = 0;
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,7,0))
-   hddLog(LOGE, FL("Transmission timeout occurred jiffies %lu"),jiffies);
-#else
    hddLog(LOGE, FL("Transmission timeout occurred jiffies %lu trans_start %lu"),
           jiffies, dev->trans_start);
-#endif
    DPTRACE(adf_dp_trace(NULL, ADF_DP_TRACE_HDD_TX_TIMEOUT,
                         NULL, 0, ADF_TX));
    /*
@@ -914,9 +873,7 @@ static void __hdd_tx_timeout(struct net_device *dev)
       hddLog(LOGE, FL("Queue%d status: %d txq->trans_start %lu"),
              i, netif_tx_queue_stopped(txq), txq->trans_start);
    }
-   #if defined( WLAN_DEBUG )
-    wlan_display_tx_timeout_stats(pAdapter);
-   #endif
+   wlan_display_tx_timeout_stats(pAdapter);
 }
 
 /**
@@ -1137,40 +1094,6 @@ bool drop_ip6_mcast(struct sk_buff *skb)
 #define drop_ip6_mcast(_a) 0
 #endif
 
-#ifdef CONFIG_HL_SUPPORT
-/*
- * hdd_move_radiotap_header_forward - move radiotap header to head of skb
- * @skb: skb to be modified
- *
- * For HL monitor mode, radiotap is appended to tail when update radiotap
- * info in htt layer. Need to copy it ahead of skb before indicating to OS.
- */
-static void hdd_move_radiotap_header_forward(struct sk_buff *skb)
-{
-	adf_nbuf_t msdu = (adf_nbuf_t)skb;
-	struct ieee80211_radiotap_header *rthdr;
-	uint8_t rtap_len;
-
-	adf_nbuf_put_tail(msdu,
-		sizeof(struct ieee80211_radiotap_header));
-	rthdr = (struct ieee80211_radiotap_header *)
-	    (adf_nbuf_data(msdu) + adf_nbuf_len(msdu) -
-	     sizeof(struct ieee80211_radiotap_header));
-	rtap_len = rthdr->it_len;
-	adf_nbuf_put_tail(msdu,
-			  rtap_len -
-			  sizeof(struct ieee80211_radiotap_header));
-	adf_nbuf_push_head(msdu, rtap_len);
-	adf_os_mem_copy(adf_nbuf_data(msdu), rthdr, rtap_len);
-	adf_nbuf_trim_tail(msdu, rtap_len);
-}
-#else
-static inline void hdd_move_radiotap_header_forward(struct sk_buff *skb)
-{
-    /* no-op */
-}
-#endif
-
 /**
  * hdd_mon_rx_packet_cbk() - Receive callback registered with TLSHIM.
  * @vosContext: [in] pointer to VOS context
@@ -1211,7 +1134,7 @@ VOS_STATUS hdd_mon_rx_packet_cbk(v_VOID_t *vos_ctx, adf_nbuf_t rx_buf,
 	adapter = adapter_node->pAdapter;
 	if ((NULL == adapter) || (WLAN_HDD_ADAPTER_MAGIC != adapter->magic)) {
 		VOS_TRACE(VOS_MODULE_ID_HDD_DATA, VOS_TRACE_LEVEL_ERROR,
-			  "invalid adapter %pK for sta Id %d", adapter, sta_id);
+			  "invalid adapter %p for sta Id %d", adapter, sta_id);
 		return VOS_STATUS_E_FAILURE;
 	}
 
@@ -1220,8 +1143,6 @@ VOS_STATUS hdd_mon_rx_packet_cbk(v_VOID_t *vos_ctx, adf_nbuf_t rx_buf,
 	/* walk the chain until all are processed */
 	skb = (struct sk_buff *) rx_buf;
 	while (NULL != skb) {
-		hdd_move_radiotap_header_forward(skb);
-
 		skb_next = skb->next;
 		skb->dev = adapter->dev;
 
@@ -1255,65 +1176,6 @@ VOS_STATUS hdd_mon_rx_packet_cbk(v_VOID_t *vos_ctx, adf_nbuf_t rx_buf,
 
 	return VOS_STATUS_SUCCESS;
 }
-
-/**
- * hdd_is_arp_local() - check if local or non local arp
- * @skb: pointer to sk_buff
- *
- * Return: true if local arp or false otherwise.
- */
-static bool hdd_is_arp_local(struct sk_buff *skb)
-{
-
-	struct arphdr *arp;
-	struct in_ifaddr **ifap = NULL;
-	struct in_ifaddr *ifa = NULL;
-	struct in_device *in_dev;
-	unsigned char *arp_ptr;
-	__be32 tip;
-
-	arp = (struct arphdr *)skb->data;
-	if (arp->ar_op == htons(ARPOP_REQUEST)) {
-		if ((in_dev = __in_dev_get_rtnl(skb->dev)) != NULL) {
-			for (ifap = &in_dev->ifa_list; (ifa = *ifap) != NULL;
-				ifap = &ifa->ifa_next) {
-				if (!strcmp(skb->dev->name,
-				    ifa->ifa_label))
-					break;
-			}
-		}
-
-		if (ifa && ifa->ifa_local) {
-			arp_ptr = (unsigned char *)(arp + 1);
-			arp_ptr += (skb->dev->addr_len + 4 + skb->dev->addr_len);
-			memcpy(&tip, arp_ptr, 4);
-			hddLog(VOS_TRACE_LEVEL_INFO, "ARP packets: local IP: %x dest IP: %x\n",
-					ifa->ifa_local, tip);
-			if (ifa->ifa_local != tip)
-				return false;
-		}
-	}
-	return true;
-}
-
-#ifdef WLAN_FEATURE_TSF_PLUS
-static inline void hdd_tsf_timestamp_rx(hdd_context_t *hdd_ctx,
-					adf_nbuf_t netbuf,
-					uint64_t target_time)
-{
-	if (!HDD_TSF_IS_RX_SET(hdd_ctx))
-		return;
-
-	hdd_rx_timestamp(netbuf, target_time);
-}
-#else
-static inline void hdd_tsf_timestamp_rx(hdd_context_t *hdd_ctx,
-					adf_nbuf_t netbuf,
-					uint64_t target_time)
-{
-}
-#endif
-
 /**============================================================================
   @brief hdd_rx_packet_cbk() - Receive callback registered with TL.
   TL will call this to notify the HDD when one or more packets were
@@ -1336,10 +1198,9 @@ VOS_STATUS hdd_rx_packet_cbk(v_VOID_t *vosContext,
    struct sk_buff *skb_next;
    unsigned int cpu_index;
 #ifdef QCA_PKT_PROTO_TRACE
-   v_U8_t proto_type = 0;
+   v_U8_t proto_type;
 #endif /* QCA_PKT_PROTO_TRACE */
    hdd_station_ctx_t *pHddStaCtx = NULL;
-   bool wake_lock = false;
 
    //Sanity check on inputs
    if ((NULL == vosContext) || (NULL == rxBuf))
@@ -1357,7 +1218,7 @@ VOS_STATUS hdd_rx_packet_cbk(v_VOID_t *vosContext,
 
    pAdapter = pHddCtx->sta_to_adapter[staId];
    if ((NULL == pAdapter) || (WLAN_HDD_ADAPTER_MAGIC != pAdapter->magic)) {
-      hddLog(LOGE, FL("invalid adapter %pK for sta Id %d"), pAdapter, staId);
+      hddLog(LOGE, FL("invalid adapter %p for sta Id %d"), pAdapter, staId);
       return VOS_STATUS_E_FAILURE;
    }
 
@@ -1384,7 +1245,8 @@ VOS_STATUS hdd_rx_packet_cbk(v_VOID_t *vosContext,
                "%s: Dropping HS 2.0 Gratuitous ARP or Unsolicited NA"
                " else dropping as Driver load/unload is in progress",
                __func__);
-            adf_nbuf_free(skb);
+            kfree_skb(skb);
+
             skb = skb_next;
             continue;
       }
@@ -1442,7 +1304,8 @@ VOS_STATUS hdd_rx_packet_cbk(v_VOID_t *vosContext,
          ++pAdapter->hdd_stats.hddTxRxStats.rxDropped[cpu_index];
          VOS_TRACE(VOS_MODULE_ID_HDD_DATA, VOS_TRACE_LEVEL_INFO,
                    "%s: Dropping multicast to self NA", __func__);
-         adf_nbuf_free(skb);
+         kfree_skb(skb);
+
          skb = skb_next;
          continue;
       }
@@ -1451,23 +1314,6 @@ VOS_STATUS hdd_rx_packet_cbk(v_VOID_t *vosContext,
       ++pAdapter->stats.rx_packets;
       pAdapter->stats.rx_bytes += skb->len;
 
-      /**
-       * Remove SKB from internal tracking table before submitting it
-       * to stack.
-       */
-      adf_net_buf_debug_release_skb(skb);
-
-      if (!wake_lock) {
-         if (skb->protocol == htons(ETH_P_ARP)) {
-            if (hdd_is_arp_local(skb))
-               wake_lock = true;
-         }
-         else
-            wake_lock = true;
-      }
-
-      hdd_tsf_timestamp_rx(pHddCtx, skb, ktime_to_us(skb->tstamp));
-
       /*
        * If this is not a last packet on the chain
        * Just put packet into backlog queue, not scheduling RX sirq
@@ -1475,20 +1321,17 @@ VOS_STATUS hdd_rx_packet_cbk(v_VOID_t *vosContext,
       if (skb->next) {
          rxstat = netif_rx(skb);
       } else {
-          if ((pHddCtx->cfg_ini->rx_wakelock_timeout) &&
-              (PACKET_BROADCAST != skb->pkt_type) &&
-              (PACKET_MULTICAST != skb->pkt_type))
-                wake_lock = true;
-
-          if (wake_lock && pHddStaCtx->conn_info.uIsAuthenticated)
-             vos_wake_lock_timeout_acquire(&pHddCtx->rx_wake_lock,
-                            pHddCtx->cfg_ini->rx_wakelock_timeout,
-                            WIFI_POWER_EVENT_WAKELOCK_HOLD_RX);
-          /*
-           * This is the last packet on the chain
-           * Scheduling rx sirq
-           */
-          rxstat = netif_rx_ni(skb);
+         if ((pHddCtx->cfg_ini->rx_wakelock_timeout) &&
+             (PACKET_BROADCAST != skb->pkt_type) &&
+             (PACKET_MULTICAST != skb->pkt_type))
+	    vos_wake_lock_timeout_acquire(&pHddCtx->rx_wake_lock,
+                        pHddCtx->cfg_ini->rx_wakelock_timeout,
+                        WIFI_POWER_EVENT_WAKELOCK_HOLD_RX);
+         /*
+          * This is the last packet on the chain
+          * Scheduling rx sirq
+          */
+         rxstat = netif_rx_ni(skb);
       }
 
       if (NET_RX_SUCCESS == rxstat)
@@ -1644,7 +1487,6 @@ void wlan_hdd_netif_queue_control(hdd_adapter_t *adapter,
 		hddLog(LOGE, FL("adapter is invalid"));
 		return;
 	}
-	hddLog(LOG1, FL("action is %d reason is %d"),action,reason);
 
 	switch (action) {
 	case WLAN_NETIF_CARRIER_ON:
@@ -1831,6 +1673,7 @@ void hdd_dhcp_pkt_trace_buf_update (struct sk_buff *skb, int is_transmission,
 	}
 }
 #endif
+
 #ifdef FEATURE_BUS_BANDWIDTH
 /**
  * hdd_rst_tcp_delack() - Reset tcp delack value to original level
@@ -1846,8 +1689,8 @@ void hdd_rst_tcp_delack(hdd_context_t *hdd_ctx)
 	enum cnss_bus_width_type  next_level = CNSS_BUS_WIDTH_LOW;
 
 	hdd_ctx->rx_high_ind_cnt = 0;
-	wlan_hdd_send_svc_nlink_msg(hdd_ctx->radio_index, WLAN_SVC_WLAN_TP_IND,
-				&next_level, sizeof(next_level));
+	wlan_hdd_send_svc_nlink_msg(WLAN_SVC_WLAN_TP_IND, &next_level,
+							sizeof(next_level));
 }
 #else
 void hdd_rst_tcp_delack(hdd_context_t *hdd_ctx)

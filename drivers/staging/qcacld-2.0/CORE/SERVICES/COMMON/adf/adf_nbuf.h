@@ -58,7 +58,6 @@
 #define NBUF_PKT_TRAC_MAX_STRING   12
 #define NBUF_PKT_TRAC_PROTO_STRING 4
 #define ADF_NBUF_PKT_ERROR         1
-#define ADF_NBUF_FWD_FLAG          1
 
 #define ADF_NBUF_TRAC_IPV4_OFFSET       14
 #define ADF_NBUF_TRAC_IPV4_HEADER_SIZE  20
@@ -73,7 +72,6 @@
 #define ADF_NBUF_SRC_MAC_OFFSET         6
 #define ADF_NBUF_TRAC_IPV4_PROTO_TYPE_OFFSET  23
 #define ADF_NBUF_TRAC_IPV4_DEST_ADDR_OFFSET   30
-#define ADF_NBUF_TRAC_IPV4_SRC_ADDR_OFFSET    26
 #define ADF_NBUF_TRAC_IPV6_PROTO_TYPE_OFFSET  20
 #define ADF_NBUF_TRAC_IPV6_DEST_ADDR_OFFSET   38
 #define ADF_NBUF_TRAC_IPV6_DEST_ADDR          0xFF00
@@ -82,14 +80,6 @@
 #define ADF_NBUF_TRAC_UDP_TYPE          17
 #define ADF_NBUF_TRAC_ICMPV6_TYPE       0x3a
 #define ADF_NBUF_TRAC_WAI_ETH_TYPE      0x88b4
-
-#define ADF_NBUF_TRAC_TCP_FLAGS_OFFSET       47
-#define ADF_NBUF_TRAC_TCP_ACK_OFFSET         42
-#define ADF_NBUF_TRAC_TCP_HEADER_LEN_OFFSET  46
-#define ADF_NBUF_TRAC_TCP_ACK_MASK           0x10
-#define ADF_NBUF_TRAC_TCP_SPORT_OFFSET       34
-#define ADF_NBUF_TRAC_TCP_DPORT_OFFSET       36
-
 
 /* EAPOL Related MASK */
 #define EAPOL_PACKET_TYPE_OFFSET        15
@@ -130,8 +120,6 @@
  * @rate: Rate in terms 500Kbps
  * @ant_signal_db: Rx packet RSSI
  * @nr_ant: Number of Antennas used for streaming
- * @mcs_info: Parsed ht sig info
- * @vht_info: Parsed vht sig info
  */
 
 struct mon_rx_status {
@@ -142,36 +130,6 @@ struct mon_rx_status {
 	uint8_t  rate;
 	uint8_t  ant_signal_db;
 	uint8_t  nr_ant;
-	struct mon_rx_mcs_info {
-		uint8_t  valid;
-		uint32_t mcs: 7,
-			 bw: 1,
-			 smoothing: 1,
-			 not_sounding: 1,
-			 aggregation: 1,
-			 stbc: 2,
-			 fec: 1,
-			 sgi: 1,
-			 ness: 2,
-			 reserved: 15;
-	} mcs_info;
-
-	struct mon_rx_vht_info {
-		uint8_t  valid;
-		uint32_t bw: 2,
-			 stbc: 1,
-			 gid: 6,
-			 nss: 3,
-			 paid: 9,
-			 txps_forbidden: 1,
-			 sgi: 1,
-			 sgi_disambiguation: 1,
-			 coding: 1,
-			 ldpc_extra_symbol: 1,
-			 mcs: 4,
-			 beamformed: 1,
-			 reserved: 1;
-	} vht_info;
 };
 
 /* DHCP Related Mask */
@@ -508,49 +466,7 @@ adf_nbuf_dmamap_info(adf_os_dma_map_t bmap, adf_os_dmamap_info_t *sg)
     __adf_nbuf_dmamap_info(bmap, sg);
 }
 
-#ifdef MEMORY_DEBUG
-void adf_net_buf_debug_init(void);
-void adf_net_buf_debug_exit(void);
-void adf_net_buf_debug_clean(void);
-void adf_net_buf_debug_add_node(adf_nbuf_t net_buf, size_t size,
-			uint8_t *file_name, uint32_t line_num);
-void adf_net_buf_debug_delete_node(adf_nbuf_t net_buf);
-void adf_net_buf_debug_release_skb(adf_nbuf_t net_buf);
 
-/* nbuf allocation routines */
-
-#define adf_nbuf_alloc(d, s, r, a, p)			\
-	adf_nbuf_alloc_debug(d, s, r, a, p, __FILE__, __LINE__)
-static inline adf_nbuf_t
-adf_nbuf_alloc_debug(adf_os_device_t osdev, adf_os_size_t size, int reserve,
-		int align, int prio, uint8_t *file_name,
-		uint32_t line_num)
-{
-	adf_nbuf_t net_buf;
-	net_buf = __adf_nbuf_alloc(osdev, size, reserve, align, prio);
-
-	/* Store SKB in internal ADF tracking table */
-	if (adf_os_likely(net_buf))
-		adf_net_buf_debug_add_node(net_buf, size, file_name, line_num);
-
-	return net_buf;
-}
-
-static inline void adf_nbuf_free(adf_nbuf_t net_buf)
-{
-	/* Remove SKB from internal ADF tracking table */
-	if (adf_os_likely(net_buf))
-		adf_net_buf_debug_delete_node(net_buf);
-
-	__adf_nbuf_free(net_buf);
-}
-
-#else
-
-static inline void adf_net_buf_debug_release_skb(adf_nbuf_t net_buf)
-{
-	return;
-}
 
 /*
  * nbuf allocation rouines
@@ -619,8 +535,6 @@ adf_nbuf_free(adf_nbuf_t buf)
 {
     __adf_nbuf_free(buf);
 }
-
-#endif
 
 /**
  * @brief Free adf_nbuf
@@ -1255,20 +1169,6 @@ adf_nbuf_append_ext_list(adf_nbuf_t head_buf, adf_nbuf_t ext_list,
 }
 
 /**
- * adf_nbuf_get_ext_list() - Get the link to extended nbuf list.
- * @head_buf: Network buf holding head segment (single)
- *
- * This ext_list is populated when we have Jumbo packet, for example in case of
- * monitor mode amsdu packet reception, and are stiched using frags_list.
- *
- * Return: Network buf list holding linked extensions from head buf.
- */
-static inline adf_nbuf_t adf_nbuf_get_ext_list(adf_nbuf_t head_buf)
-{
-	return (adf_nbuf_t)__adf_nbuf_get_ext_list(head_buf);
-}
-
-/**
  * @brief Gets the tx checksumming to be performed on this buf
  *
  * @param[in]  buf       buffer
@@ -1442,52 +1342,6 @@ adf_nbuf_trace_set_proto_type(adf_nbuf_t buf, uint8_t proto_type)
 {
    __adf_nbuf_trace_set_proto_type(buf, proto_type);
 }
-
-/**
- * adf_nbuf_get_fwd_flag() - get packet forwarding flag
- * @buf: pointer to adf_nbuf_t structure
- *
- * Returns: packet forwarding flag
-*/
-static inline uint8_t
-adf_nbuf_get_fwd_flag(adf_nbuf_t buf)
-{
-   return __adf_nbuf_get_fwd_flag(buf);
-}
-
-/**
- * adf_nbuf_get_fwd_flag() - update packet forwarding flag
- * @buf: pointer to adf_nbuf_t structure
- * @flag: forwarding flag
- *
- * Returns: none
-*/
-static inline void
-adf_nbuf_set_fwd_flag(adf_nbuf_t buf, uint8_t flag)
-{
-   __adf_nbuf_set_fwd_flag(buf, flag);
-}
-
-/**
- * adf_nbuf_is_ipa_nbuf() - Check if frame owner is IPA
- * @skb: Pointer to skb
- *
- * Returns: TRUE if the owner is IPA else FALSE
- *
- */
-#if (defined(QCA_MDM_DEVICE) && defined(IPA_OFFLOAD))
-static inline bool
-adf_nbuf_is_ipa_nbuf(adf_nbuf_t buf)
-{
-    return (NBUF_OWNER_ID(buf) == IPA_NBUF_OWNER_ID);
-}
-#else
-static inline bool
-adf_nbuf_is_ipa_nbuf(adf_nbuf_t buf)
-{
-    return false;
-}
-#endif /* QCA_MDM_DEVICE && IPA_OFFLOAD*/
 
 /**
  * @brief This function registers protocol trace callback
@@ -1855,12 +1709,12 @@ bool adf_nbuf_data_is_ipv4_mcast_pkt(uint8_t *data)
 }
 
 /**
- * adf_nbuf_data_is_ipv6_mcast_pkt() - check if it is IPV6 multicast packet.
+ * adf_nbuf_data_is_ipv6_mcast_pkt() - check if it is IPv6 multicast packet.
  * @data: Pointer to IPV6 packet data buffer
  *
- * This func. checks whether it is a IPV6 multicast packet or not.
+ * This func. checks whether it is a IPv6 multicast packet or not.
  *
- * Return: TRUE if it is a IPV6 multicast packet
+ * Return: TRUE if it is a IPv6 multicast packet
  *         FALSE if not
  */
 static inline
@@ -2104,12 +1958,12 @@ adf_nbuf_update_skb_mark(adf_nbuf_t skb, uint32_t mask)
 }
 
 /**
- * adf_nbuf_is_wai() - Check if frame is WAI
+ * adf_nbuf_is_wai_pkt() - Check if frame is WAI
  * @skb: Pointer to skb
  *
- * This function checks if the frame is WAPI.
+ * This function checks if the frame is WAI.
  *
- * Return: true (1) if WAPI
+ * Return: true (1) if WAI
  *
  */
 static inline bool adf_nbuf_is_wai_pkt(struct sk_buff *skb)

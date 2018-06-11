@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2016 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -204,7 +204,6 @@ eHalStatus pmcStart (tHalHandle hHal)
     pMac->pmc.wowlModeRequired = FALSE;
     pMac->pmc.bmpsRequestedByHdd = FALSE;
     pMac->pmc.remainInPowerActiveTillDHCP = FALSE;
-    pMac->pmc.full_power_till_set_key = false;
     pMac->pmc.remainInPowerActiveThreshold = 0;
 
     /* WLAN Switch initial states. */
@@ -3148,8 +3147,6 @@ eHalStatus pmcGetFilterMatchCount
 #endif // WLAN_FEATURE_PACKET_FILTERING
 
 #ifdef WLAN_FEATURE_GTK_OFFLOAD
-
-#define GTK_OFFLOAD_DISABLE 1
 /* ---------------------------------------------------------------------------
     \fn pmcSetGTKOffload
     \brief  Set GTK offload feature.
@@ -3189,11 +3186,6 @@ eHalStatus pmcSetGTKOffload (tHalHandle hHal, tpSirGtkOffloadParams pGtkOffload,
                  sizeof(tSirMacAddr));
 
     vos_mem_copy(pRequestBuf, pGtkOffload, sizeof(tSirGtkOffloadParams));
-
-#ifdef WLAN_FEATURE_FILS_SK
-    if (pSession->is_fils_connection)
-        pRequestBuf->ulFlags = GTK_OFFLOAD_DISABLE;
-#endif
 
     msg.type = WDA_GTK_OFFLOAD_REQ;
     msg.reserved = 0;
@@ -3616,40 +3608,14 @@ eHalStatus PmcOffloadEnableStaModePowerSave(tHalHandle hHal,
 }
 
 eHalStatus PmcOffloadDisableStaModePowerSave(tHalHandle hHal,
-                                             FullPowerReqCb callback_routine,
-                                             void *callback_context,
                                              tANI_U32 sessionId)
 {
     tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
     tpPsOffloadPerSessionInfo pmc = &pMac->pmcOffloadInfo.pmc[sessionId];
     eHalStatus status = eHAL_STATUS_SUCCESS;
-    tpPmcOffloadReqFullPowerEntry power_entry;
-    tListElem *pEntry;
 
     if (pmc->configStaPsEnabled) {
-        if (callback_routine) {
-            /* Allocate entry for Full Power Cb list. */
-            power_entry = vos_mem_malloc(sizeof(*power_entry));
-            if (!power_entry) {
-                smsLog(pMac, LOGE,
-                       FL("Cannot allocate memory for Full Pwr routine list"));
-                return eHAL_STATUS_FAILED_ALLOC;
-            }
-            /* Store routine and context in entry. */
-            power_entry->fullPwrCb = callback_routine;
-            power_entry->callbackContext = callback_context;
-            power_entry->sessionId = sessionId;
-            /* Add entry to list. */
-            csrLLInsertTail(&pmc->fullPowerCbList, &power_entry->link, FALSE);
-        }
         status = pmcOffloadDisableStaPsHandler(pMac, sessionId);
-        if ((eHAL_STATUS_SUCCESS != status) && callback_routine) {
-            pEntry = csrLLRemoveTail(&pmc->fullPowerCbList, TRUE);
-            power_entry = GET_BASE_ADDR(pEntry,
-                    tPmcOffloadReqFullPowerEntry, link);
-            vos_mem_free(power_entry);
-            return eHAL_STATUS_FAILURE;
-        }
     } else {
         /*
          * configStaPsEnabled is the master flag
@@ -3662,9 +3628,8 @@ eHalStatus PmcOffloadDisableStaModePowerSave(tHalHandle hHal,
         /* Stop the Auto Sta Ps Timer if running */
         pmcOffloadStopAutoStaPsTimer(pMac, sessionId);
         pmc->configDefStaPsEnabled = FALSE;
-        return eHAL_STATUS_SUCCESS;
     }
-    return eHAL_STATUS_PMC_PENDING;
+    return status;
 }
 
 eHalStatus pmcOffloadRequestFullPower (tHalHandle hHal, tANI_U32 sessionId,

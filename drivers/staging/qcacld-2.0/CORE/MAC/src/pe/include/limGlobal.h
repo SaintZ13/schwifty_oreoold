@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2016 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -45,7 +45,7 @@
 #include "sirMacPropExts.h"
 #include "sirCommon.h"
 #include "sirDebug.h"
-#include "wni_cfg.h"
+#include "wniCfgSta.h"
 #include "csrApi.h"
 #include "sapApi.h"
 #include "dot11f.h"
@@ -53,6 +53,10 @@
 
 /// Maximum number of scan hash table entries
 #define LIM_MAX_NUM_OF_SCAN_RESULTS 256
+
+// Sending Disassociate frames threshold
+#define LIM_SEND_DISASSOC_FRAME_THRESHOLD       2
+#define LIM_HASH_MISS_TIMER_MS                  10000
 
 // Deferred Message Queue Length
 #define MAX_DEFERRED_QUEUE_LEN                  80
@@ -68,11 +72,7 @@
 #define IS_5G_BAND(__rfBand)     ((__rfBand & 0x3) == 0x2)
 #define IS_24G_BAND(__rfBand)    ((__rfBand & 0x3) == 0x1)
 
-#ifdef CHANNEL_HOPPING_ALL_BANDS
-#define CHAN_HOP_ALL_BANDS_ENABLE        1
-#else
-#define CHAN_HOP_ALL_BANDS_ENABLE        0
-#endif
+#define LIM_MAX_CSA_IE_UPDATES                  ( 5 )
 
 // enums exported by LIM are as follows
 
@@ -261,11 +261,6 @@ typedef struct sLimMlmJoinReq
     tSirMacRateSet         operationalRateSet;
     tANI_U8                 sessionId;
     tSirBssDescription     bssDescription;
-    /*
-     * WARNING: Pls make bssDescription as last variable in struct
-     * tLimMlmJoinReq as it has ieFields followed after this bss
-     * description. Adding a variable after this corrupts the ieFields
-     */
 } tLimMlmJoinReq, *tpLimMlmJoinReq;
 
 typedef struct sLimMlmScanReq
@@ -322,7 +317,7 @@ struct tLimScanResultNode
 typedef struct sLimMlmOemDataReq
 {
     tSirMacAddr           selfMacAddr;
-    uint32_t              data_len;
+    uint32_t               data_len;
     uint8_t               *data;
 } tLimMlmOemDataReq, *tpLimMlmOemDataReq;
 

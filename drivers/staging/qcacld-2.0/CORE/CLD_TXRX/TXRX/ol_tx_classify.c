@@ -349,7 +349,7 @@ ol_tx_classify(
     dest_addr = ol_tx_dest_addr_find(pdev, tx_nbuf);
     if (!dest_addr) {
        VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_ERROR,
-                 "%s: Invalid dest_addr", __func__);
+                 FL("Invalid dest_addr");
         return NULL;
     }
     if ((IEEE80211_IS_MULTICAST(dest_addr))
@@ -366,7 +366,7 @@ ol_tx_classify(
             peer = ol_txrx_assoc_peer_find(vdev);
             if (!peer) {
                 VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_ERROR,
-                    "Error: STA %pK (%02x:%02x:%02x:%02x:%02x:%02x) "
+                    "Error: STA %p (%02x:%02x:%02x:%02x:%02x:%02x) "
                     "trying to send bcast DA tx data frame "
                     "w/o association\n",
                     vdev,
@@ -400,7 +400,7 @@ ol_tx_classify(
             peer = ol_txrx_peer_find_hash_find(pdev, vdev->mac_addr.raw, 0, 1);
             if (!peer) {
                 VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_ERROR,
-                    "Error: vdev %pK (%02x:%02x:%02x:%02x:%02x:%02x) "
+                    "Error: vdev %p (%02x:%02x:%02x:%02x:%02x:%02x) "
                     "trying to send bcast/mcast, but no self-peer found\n",
                     vdev,
                     vdev->mac_addr.raw[0], vdev->mac_addr.raw[1],
@@ -489,7 +489,7 @@ ol_tx_classify(
              * to send it to.
              */
             VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO,
-                "Error: vdev %pK (%02x:%02x:%02x:%02x:%02x:%02x) "
+                "Error: vdev %p (%02x:%02x:%02x:%02x:%02x:%02x) "
                 "trying to send unicast tx data frame to an unknown peer\n",
                 vdev,
                 vdev->mac_addr.raw[0], vdev->mac_addr.raw[1],
@@ -498,8 +498,7 @@ ol_tx_classify(
             return NULL; /* error */
         }
         TX_SCHED_DEBUG_PRINT("Peer found\n");
-        if ((adf_nbuf_get_fwd_flag(tx_nbuf) != ADF_NBUF_FWD_FLAG) &&
-                          (!peer->qos_capable)) {
+        if (!peer->qos_capable) {
             tid = OL_TX_NON_QOS_TID;
         } else if ((peer->security[OL_TXRX_PEER_SECURITY_UNICAST].sec_type
                           != htt_sec_type_wapi) &&
@@ -532,7 +531,7 @@ ol_tx_classify(
         if (tx_msdu_info->htt.info.peer_id == HTT_INVALID_PEER_ID) {
             if (peer) {
                 TXRX_PRINT(TXRX_PRINT_LEVEL_ERR,
-                      "%s: remove the peer for invalid peer_id %pK\n",
+                      "%s: remove the peer for invalid peer_id %p\n",
                       __func__, peer);
                 /* remove the peer reference added above */
                 ol_txrx_peer_unref_delete(peer);
@@ -556,7 +555,7 @@ ol_tx_classify(
         tx_msdu_info->peer != NULL) {
 
         TXRX_PRINT(TXRX_PRINT_LEVEL_INFO1,
-                      "%s: remove the peer reference %pK\n", __func__, peer);
+                      "%s: remove the peer reference %p\n", __func__, peer);
         /* remove the peer reference added above */
         ol_txrx_peer_unref_delete(tx_msdu_info->peer);
         /* Making peer NULL in case if multicast non STA mode */
@@ -590,7 +589,7 @@ ol_tx_classify_mgmt(
     dest_addr = ol_tx_dest_addr_find(pdev, tx_nbuf);
     if (!dest_addr) {
        VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_ERROR,
-                 "%s: Invalid dest_addr", __func__);
+                 FL("Invalid dest_addr");
         return NULL;
     }
     if (IEEE80211_IS_MULTICAST(dest_addr)) {
