@@ -354,7 +354,7 @@ include $(srctree)/scripts/Kbuild.include
 # Make variables (CC, etc...)
 AS		= $(CROSS_COMPILE)as
 LD		= $(CROSS_COMPILE)ld
-CC		= $(CROSS_COMPILE)gcc
+REAL_CC		= $(CROSS_COMPILE)gcc
 CPP		= $(CC) -E
 AR		= $(CROSS_COMPILE)ar
 NM		= $(CROSS_COMPILE)nm
@@ -368,6 +368,10 @@ DEPMOD		= /sbin/depmod
 PERL		= perl
 PYTHON		= python
 CHECK		= sparse
+
+# Use the wrapper for the compiler.  This wrapper scans for new
+# warnings and causes the build to stop upon encountering them.
+CC		= $(srctree)/scripts/gcc-wrapper.py $(REAL_CC)
 
 CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
 		  -Wbitwise -Wno-return-void $(CF)
@@ -403,14 +407,7 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -fno-strict-aliasing -fno-common \
 		   -Werror-implicit-function-declaration \
 		   -Wno-format-security \
-		   -std=gnu89 \
-		   -mcpu=cortex-a57 -mtune=cortex-a57 -fdiagnostics-color=always \
-		   -Wno-maybe-uninitialized -Wno-unused-variable -Wno-unused-function -Wno-unused-label \
-		   -Wno-memset-transposed-args -Wno-bool-compare -Wno-logical-not-parentheses -Wno-discarded-array-qualifiers \
-		   -Wno-unused-const-variable -Wno-array-bounds -Wno-incompatible-pointer-types \
-		   -Wno-misleading-indentation -Wno-tautological-compare -Wno-error=misleading-indentation \
-		   -Wno-format-truncation -Wno-duplicate-decl-specifier -Wno-memset-elt-size -Wno-bool-operation \
-		   -Wno-int-in-bool-context -Wno-parentheses -Wno-switch-unreachable -Wno-stringop-overflow -Wno-format-overflow
+		   -std=gnu89
 
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
@@ -1203,8 +1200,7 @@ MRPROPER_FILES += .config .config.old .version .old_version $(version_h) \
 		  Module.symvers tags TAGS cscope* GPATH GTAGS GRTAGS GSYMS \
 		  signing_key.priv signing_key.x509 x509.genkey		\
 		  extra_certificates signing_key.x509.keyid		\
-		  signing_key.x509.signer include/linux/version.h	\
-		  drivers/platform/msm/ipa/ipa_common
+		  signing_key.x509.signer include/linux/version.h
 
 # clean - Delete most, but leave enough to build external modules
 #
