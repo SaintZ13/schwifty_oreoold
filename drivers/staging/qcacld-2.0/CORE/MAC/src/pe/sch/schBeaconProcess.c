@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -38,8 +38,7 @@
  */
 
 #include "palTypes.h"
-#include "wniCfgSta.h"
-
+#include "wni_cfg.h"
 #include "cfgApi.h"
 #include "pmmApi.h"
 #include "limApi.h"
@@ -360,10 +359,16 @@ static void __schBeaconProcessForSession( tpAniSirGlobal      pMac,
     vos_mem_zero(&beaconParams, sizeof(tUpdateBeaconParams));
     beaconParams.paramChangeBitmap = 0;
 
-    if (RF_CHAN_14 >= psessionEntry->currentOperChannel)
-        cbMode = pMac->roam.configParam.channelBondingMode24GHz;
-    else
+    if (RF_CHAN_14 >= psessionEntry->currentOperChannel) {
+        if (psessionEntry->force_24ghz_in_ht20)
+                cbMode =
+                     WNI_CFG_CHANNEL_BONDING_MODE_DISABLE;
+            else
+                cbMode =
+                     pMac->roam.configParam.channelBondingMode24GHz;
+    } else {
         cbMode = pMac->roam.configParam.channelBondingMode5GHz;
+    }
 
     if (LIM_IS_IBSS_ROLE(psessionEntry)) {
         limHandleIBSScoalescing(pMac, pBeacon,  pRxPacketInfo, psessionEntry);
@@ -467,7 +472,8 @@ static void __schBeaconProcessForSession( tpAniSirGlobal      pMac,
             sendProbeReq = TRUE;
     }
 
-    if ( psessionEntry->htCapability && pBeacon->HTInfo.present )
+    if (psessionEntry->htCapability && pBeacon->HTInfo.present &&
+                                 (!LIM_IS_IBSS_ROLE(psessionEntry)))
     {
         limUpdateStaRunTimeHTSwitchChnlParams( pMac, &pBeacon->HTInfo, bssIdx,psessionEntry);
     }
@@ -528,8 +534,9 @@ static void __schBeaconProcessForSession( tpAniSirGlobal      pMac,
                 skip_opmode_update = true;
 
              if (!skip_opmode_update &&
-                 (operMode != pBeacon->OperatingMode.chanWidth))
-             {
+                 ((operMode != pBeacon->OperatingMode.chanWidth) ||
+                 (pStaDs->vhtSupportedRxNss !=
+                  (pBeacon->OperatingMode.rxNSS + 1)))) {
                 uint32_t fw_vht_ch_wd = wma_get_vht_ch_width();
                 PELOG1(schLog(pMac, LOG1,
                          FL(" received OpMode Chanwidth %d, staIdx = %d"),
@@ -739,19 +746,11 @@ fail:
 
 
 /**
- * schBeaconProcess
+ * schBeaconProcess() - process the received beacon frame
+ * @pMac:        mac global context
+ * @pRxPacketInfo:  pointer to buffer descriptor
  *
- * FUNCTION:
- * Process the received beacon frame
- *
- * LOGIC:
-  *
- * ASSUMPTIONS:
- *
- * NOTE:
- *
- * @param pRxPacketInfo pointer to buffer descriptor
- * @return None
+ * Return: none
  */
 
 void schBeaconProcess(tpAniSirGlobal pMac, tANI_U8* pRxPacketInfo, tpPESession psessionEntry)
@@ -759,9 +758,7 @@ void schBeaconProcess(tpAniSirGlobal pMac, tANI_U8* pRxPacketInfo, tpPESession p
     static tSchBeaconStruct beaconStruct;
     tUpdateBeaconParams beaconParams;
     tpPESession pAPSession = NULL;
-#ifdef WLAN_FEATURE_MBSSID
     tANI_U8 i;
-#endif
 
     vos_mem_zero(&beaconParams, sizeof(tUpdateBeaconParams));
     beaconParams.paramChangeBitmap = 0;
@@ -797,7 +794,6 @@ void schBeaconProcess(tpAniSirGlobal pMac, tANI_U8* pRxPacketInfo, tpPESession p
     *
     */
 
-#ifdef WLAN_FEATURE_MBSSID
 
     for (i =0; i < pMac->lim.maxBssId; i++)
     {
@@ -832,31 +828,6 @@ void schBeaconProcess(tpAniSirGlobal pMac, tANI_U8* pRxPacketInfo, tpPESession p
             }
         }
     }
-
-#else
-
-    if (((pAPSession = limIsApSessionActive(pMac)) != NULL)
-#ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
-          && (!(WDA_GET_OFFLOADSCANLEARN(pRxPacketInfo)))
-#endif
-    )
-    {
-        beaconParams.bssIdx = pAPSession->bssIdx;
-        if (pAPSession->gLimProtectionControl != WNI_CFG_FORCE_POLICY_PROTECTION_DISABLE)
-            ap_beacon_process(pMac,  pRxPacketInfo, &beaconStruct, &beaconParams, pAPSession);
-
-        if ((VOS_FALSE == pMac->sap.SapDfsInfo.is_dfs_cac_timer_running)
-            && beaconParams.paramChangeBitmap)
-        {
-            //Update the beacons and apply the new settings to HAL
-            schSetFixedBeaconFields(pMac, pAPSession);
-            PELOG1(schLog(pMac, LOG1, FL("Beacon for PE session[%d] got changed.  "), pAPSession->peSessionId);)
-            PELOG1(schLog(pMac, LOG1, FL("sending beacon param change bitmap: 0x%x "), beaconParams.paramChangeBitmap);)
-            limSendBeaconParams(pMac, &beaconParams, pAPSession);
-        }
-    }
-
-#endif
 
     /*
     * Now process the beacon in the context of the BSS which is transmitting the beacons, if one is found

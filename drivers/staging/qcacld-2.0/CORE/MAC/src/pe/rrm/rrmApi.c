@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -44,7 +44,7 @@
 #include "wniApi.h"
 #include "sirApi.h"
 #include "aniGlobal.h"
-#include "wniCfgSta.h"
+#include "wni_cfg.h"
 #include "limTypes.h"
 #include "limUtils.h"
 #include "limSendSmeRspMessages.h"
@@ -221,7 +221,7 @@ rrmSetMaxTxPowerRsp ( tpAniSirGlobal pMac, tpSirMsgQ limMsgQ )
    {
       for (i =0;i < pMac->lim.maxBssId;i++)
       {
-         if (pMac->lim.gpSession[i].valid == TRUE )
+         if ( (pMac->lim.gpSession[i].valid == TRUE ))
          {
             pSessionEntry = &pMac->lim.gpSession[i];
             rrmCacheMgmtTxPower ( pMac, pMaxTxParams->power, pSessionEntry );
@@ -282,7 +282,7 @@ rrmProcessLinkMeasurementRequest( tpAniSirGlobal pMac,
    }
    pHdr = WDA_GET_RX_MAC_HEADER( pRxPacketInfo );
 
-   LinkReport.txPower = limGetMaxTxPower (pLinkReq->MaxTxPower.maxTxPower,
+   LinkReport.txPower = limGetMaxTxPower (pSessionEntry->maxTxPower,
                                           pLinkReq->MaxTxPower.maxTxPower,
                                           pMac->roam.configParam.nTxPowerCap);
 
@@ -629,20 +629,24 @@ rrmProcessBeaconReportReq( tpAniSirGlobal pMac,
    if( pBeaconReq->measurement_request.Beacon.num_APChannelReport )
    {
       tANI_U8 *ch_lst = pSmeBcnReportReq->channelList.channelNumber;
-      uint8_t len;
-      uint16_t ch_ctr = 0;
-      for( num_APChanReport = 0 ; num_APChanReport < pBeaconReq->measurement_request.Beacon.num_APChannelReport ; num_APChanReport++ )
-      {
-         len = pBeaconReq->measurement_request.Beacon.
-                            APChannelReport[num_APChanReport].num_channelList;
-         if(ch_ctr + len > sizeof(pSmeBcnReportReq->channelList.channelNumber))
-            break;
+      tANI_U8 len;
+      tANI_U16 ch_ctr = 0;
+      for(num_APChanReport = 0;
+          num_APChanReport <
+          pBeaconReq->measurement_request.Beacon.num_APChannelReport;
+          num_APChanReport++) {
+              len = pBeaconReq->measurement_request.Beacon.
+                  APChannelReport[num_APChanReport].num_channelList;
+              if (ch_ctr + len >
+                 sizeof(pSmeBcnReportReq->channelList.channelNumber))
+                      break;
 
-         vos_mem_copy(&ch_lst[ch_ctr],
-                      pBeaconReq->measurement_request.Beacon.
-                      APChannelReport[num_APChanReport].channelList, len);
+              vos_mem_copy(&ch_lst[ch_ctr],
+                           pBeaconReq->measurement_request.Beacon.
+                           APChannelReport[num_APChanReport].channelList,
+                           len);
 
-         ch_ctr += len;
+              ch_ctr += len;
       }
    }
 
