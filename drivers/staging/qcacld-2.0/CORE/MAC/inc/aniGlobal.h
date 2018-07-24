@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -41,12 +41,6 @@
 
 #ifndef _ANIGLOBAL_H
 #define _ANIGLOBAL_H
-
-// Take care to avoid redefinition of this type, if it is
-// already defined in "halWmmApi.h"
-#if !defined(_HALMAC_WMM_API_H)
-typedef struct sAniSirGlobal *tpAniSirGlobal;
-#endif
 
 #include "halTypes.h"
 #include "sirCommon.h"
@@ -97,6 +91,8 @@ typedef struct sAniSirGlobal *tpAniSirGlobal;
 
 // New HAL API interface defs.
 #include "logDump.h"
+
+#include "ol_txrx_ctrl_api.h"
 
 //Check if this definition can actually move here from halInternal.h even for Volans. In that case
 //this featurization can be removed.
@@ -379,9 +375,6 @@ typedef struct sLimTimers
     // CNF_WAIT timer
     TX_TIMER            *gpLimCnfWaitTimer;
 
-    // Send Disassociate frame threshold parameters
-    TX_TIMER            gLimSendDisassocFrameThresholdTimer;
-
     TX_TIMER       gLimAddtsRspTimer;   // max wait for a response
 
     // Update OLBC Cache Timer
@@ -543,6 +536,8 @@ typedef struct sAniSirLim
     tANI_U8 abortScan;
     tLimScanChnInfo scanChnInfo;
 
+    struct lim_scan_channel_status scan_channel_status;
+
     //////////////////////////////////////     SCAN/LEARN RELATED START ///////////////////////////////////////////
     tSirMacAddr         gSelfMacAddr;   //added for BT-AMP Support
 
@@ -605,6 +600,8 @@ typedef struct sAniSirLim
     /// Variable to keep track of number of currently associated STAs
     tANI_U16  gLimNumOfAniSTAs;      // count of ANI peers
     tANI_U16  gLimAssocStaLimit;
+    uint16_t  glim_assoc_sta_limit_ap;
+    uint16_t  glim_assoc_sta_limit_go;
 
     // Heart-Beat interval value
     tANI_U32   gLimHeartBeatCount;
@@ -854,10 +851,6 @@ typedef struct sAniSirLim
     // Place holder for Pre-authentication node list
     struct tLimPreAuthNode *  pLimPreAuthList;
 
-    // Send Disassociate frame threshold parameters
-    tANI_U16            gLimDisassocFrameThreshold;
-    tANI_U16            gLimDisassocFrameCredit;
-
     // Assoc or ReAssoc Response Data/Frame
     void                *gLimAssocResponseData;
 
@@ -1015,6 +1008,7 @@ tLimMlmOemDataRsp       *gpLimMlmOemDataRsp;
     tLimDisassocDeauthCnfReq limDisassocDeauthCnfReq;
     tANI_U8 deferredMsgCnt;
     tSirDFSChannelList    dfschannelList;
+    tANI_U8 deauthMsgCnt;
     tANI_U8 gLimIbssStaLimit;
 
     /* Number of channel switch IEs sent so far */
@@ -1141,10 +1135,21 @@ typedef struct sMacOpenParameters
 #ifdef WLAN_FEATURE_NAN
     bool is_nan_enabled;
 #endif
+#ifdef WLAN_FEATURE_TSF_PLUS
+    bool is_ptp_enabled;
+#endif
     uint16_t  max_mgmt_tx_fail_count;
     bool force_target_assert_enabled;
     uint16_t pkt_bundle_timer_value;
     uint16_t pkt_bundle_size;
+#ifdef QCA_SUPPORT_TXRX_DRIVER_TCP_DEL_ACK
+    uint8_t  del_ack_enable;
+    uint16_t del_ack_timer_value;
+    uint16_t del_ack_pkt_count;
+#endif
+    bool bpf_packet_filter_enable;
+
+    struct ol_tx_sched_wrr_ac_specs_t ac_specs[OL_TX_NUM_WMM_AC];
 } tMacOpenParameters;
 
 typedef struct sHalMacStartParameters
@@ -1282,6 +1287,15 @@ typedef struct sAniSirGlobal
     int8_t first_scan_bucket_threshold;
     sir_mgmt_frame_ind_callback mgmt_frame_ind_cb;
     sir_p2p_ack_ind_callback p2p_ack_ind_cb;
+    bool snr_monitor_enabled;
+    /* channel information callback */
+    void (*chan_info_cb)(struct scan_chan_info *chan_info);
+    uint8_t  sub20_config_info;
+    uint8_t  sub20_channelwidth;
+    uint8_t  sub20_dynamic_channelwidth;
+    uint8_t  sta_sub20_current_channelwidth;
+    bool max_power_cmd_pending;
+    uint32_t sta_auth_retries_for_code17;
 } tAniSirGlobal;
 
 typedef enum

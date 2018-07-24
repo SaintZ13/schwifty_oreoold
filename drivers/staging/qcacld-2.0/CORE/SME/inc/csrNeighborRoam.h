@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -178,7 +178,7 @@ typedef struct sCsrNeighborRoamControlInfo
     tANI_U8                     currentOpportunisticThresholdDiff;
     tANI_U8                     currentRoamRescanRssiDiff;
     tANI_BOOLEAN                scanRspPending;
-    tANI_TIMESTAMP              scanRequestTimeStamp;
+    v_TIME_t                    scanRequestTimeStamp;
     tDblLinkList                roamableAPList;    // List of current FT candidates
     tCsrRoamProfile             csrNeighborRoamProfile;
 #ifdef WLAN_FEATURE_VOWIFI_11R
@@ -212,7 +212,6 @@ typedef struct sCsrNeighborRoamControlInfo
     tANI_U8                     currentRoamBmissFinalBcnt;
     tANI_U8                     currentRoamBeaconRssiWeight;
     tANI_U8                     lastSentCmd;
-    bool                        b_roam_scan_offload_started;
 } tCsrNeighborRoamControlInfo, *tpCsrNeighborRoamControlInfo;
 
 /* All the necessary Function declarations are here */
@@ -339,6 +338,7 @@ void csr_roam_reset_roam_params(tpAniSirGlobal mac_ptr);
 #define REASON_ROAM_SCAN_HI_RSSI_DELTA_CHANGED      31
 #define REASON_ROAM_SCAN_HI_RSSI_DELAY_CHANGED      32
 #define REASON_ROAM_SCAN_HI_RSSI_UB_CHANGED         33
+#define REASON_ROAM_SCAN_STA_ROAM_POLICY_CHANGED    34
 
 eHalStatus csrRoamOffloadScan(tpAniSirGlobal pMac, tANI_U8 sessionId,
                               tANI_U8 command, tANI_U8 reason);
@@ -367,6 +367,8 @@ csrNeighborRoamOffloadUpdatePreauthList(tpAniSirGlobal pMac,
         tpSirRoamOffloadSynchInd pSmeRoamOffloadSynchInd,
                    tANI_U8 sessionId);
 #endif
+void csr_neighbor_roam_state_transition(tpAniSirGlobal mac_ctx,
+		uint8_t newstate, uint8_t session);
 #endif /* WLAN_FEATURE_NEIGHBOR_ROAMING */
 
 #endif /* CSR_NEIGHBOR_ROAM_H */

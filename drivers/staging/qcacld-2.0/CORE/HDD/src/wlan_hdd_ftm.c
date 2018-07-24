@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -346,7 +346,7 @@ static VOS_STATUS wlan_ftm_vos_open( v_CONTEXT_t pVosContext, v_SIZE_t hddContex
    macOpenParms.powersaveOffloadEnabled =
       pHddCtx->cfg_ini->enablePowersaveOffload;
    vStatus = WDA_open(gpVosContext, gpVosContext->pHDDContext,
-                      wlan_hdd_ftm_update_tgt_cfg, NULL,
+                      wlan_hdd_ftm_update_tgt_cfg, NULL, NULL,
                       &macOpenParms);
    if (!VOS_IS_STATUS_SUCCESS(vStatus))
    {
@@ -741,8 +741,10 @@ err_vos_status_failure:
 static int hdd_ftm_service_registration(hdd_context_t *pHddCtx)
 {
     hdd_adapter_t *pAdapter;
-    pAdapter = hdd_open_adapter( pHddCtx, WLAN_HDD_FTM, "wlan%d",
-                wlan_hdd_get_intf_addr(pHddCtx), FALSE);
+    pAdapter = hdd_open_adapter(pHddCtx, WLAN_HDD_FTM, "wlan%d",
+                                wlan_hdd_get_intf_addr(pHddCtx),
+                                NET_NAME_UNKNOWN,
+                                FALSE);
     if( NULL == pAdapter )
     {
        hddLog(VOS_TRACE_LEVEL_ERROR,"%s: hdd_open_adapter failed", __func__);
@@ -930,7 +932,7 @@ err_status_failure:
 }
 
 #if  defined(QCA_WIFI_FTM)
-int hdd_ftm_start(hdd_context_t *pHddCtx)
+VOS_STATUS hdd_ftm_start(hdd_context_t *pHddCtx)
 {
     return wlan_hdd_ftm_start(pHddCtx);
 }
@@ -953,7 +955,8 @@ static int wlan_hdd_qcmbr_command(hdd_adapter_t *pAdapter, qcmbr_data_t *pqcmbr_
     switch (pqcmbr_data->cmd) {
         case ATH_XIOCTL_UNIFIED_UTF_CMD: {
             pqcmbr_data->copy_to_user = 0;
-            if (pqcmbr_data->length) {
+            if (pqcmbr_data->length &&
+                pqcmbr_data->length <= sizeof(pqcmbr_data->buf)) {
                 if (wlan_hdd_ftm_testmode_cmd(pqcmbr_data->buf,
                                               pqcmbr_data->length,
                                               TRUE)
@@ -1057,7 +1060,11 @@ int wlan_hdd_qcmbr_unified_ioctl(hdd_adapter_t *pAdapter, struct ifreq *ifr)
 {
     int ret = 0;
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,6,0)) && defined(CONFIG_X86_64)
+    if (in_compat_syscall()) {
+#else
     if (is_compat_task()) {
+#endif
         ret = wlan_hdd_qcmbr_compat_ioctl(pAdapter, ifr);
     } else {
         ret = wlan_hdd_qcmbr_ioctl(pAdapter, ifr);

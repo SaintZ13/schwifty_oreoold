@@ -339,7 +339,9 @@ static int hdd_ndi_create_req_handler(hdd_context_t *hdd_ctx,
 	}
 
 	adapter = hdd_open_adapter(hdd_ctx, WLAN_HDD_NDI, iface_name,
-			wlan_hdd_get_intf_addr(hdd_ctx), VOS_TRUE);
+				   wlan_hdd_get_intf_addr(hdd_ctx),
+				   NET_NAME_UNKNOWN,
+				   VOS_TRUE);
 	if (!adapter) {
 		hddLog(LOGE, FL("hdd_open_adapter failed"));
 		return -ENOMEM;
@@ -540,9 +542,13 @@ static int hdd_ndp_initiator_req_handler(hdd_context_t *hdd_ctx,
 		req.channel =
 			nla_get_u32(tb[QCA_WLAN_VENDOR_ATTR_NDP_CHANNEL]);
 
-	if (tb[QCA_WLAN_VENDOR_ATTR_NDP_CHANNEL_CONFIG])
+	if (tb[QCA_WLAN_VENDOR_ATTR_NDP_CHANNEL_CONFIG]) {
 		req.channel_cfg =
 			nla_get_u32(tb[QCA_WLAN_VENDOR_ATTR_NDP_CHANNEL_CONFIG]);
+	} else {
+		hddLog(LOGE, FL("Channel config is unavailable"));
+		return -EINVAL;
+	}
 
 	if (!tb[QCA_WLAN_VENDOR_ATTR_NDP_SERVICE_INSTANCE_ID]) {
 		hddLog(LOGE, FL("NDP service instance ID is unavailable"));
@@ -598,8 +604,8 @@ static int hdd_ndp_initiator_req_handler(hdd_context_t *hdd_ctx,
 	}
 
 	hddLog(LOG1,
-		FL("vdev_id: %d, transaction_id: %d, channel: %d, channel_cfg: %d, service_instance_id: %d, ndp_app_info_len: %d, csid: %d, peer_discovery_mac_addr: %pM"),
-		req.vdev_id, req.transaction_id, req.channel, req.channel_cfg,
+		FL("vdev_id: %d, transaction_id: %d, channel: %d, service_instance_id: %d, ndp_app_info_len: %d, csid: %d, peer_discovery_mac_addr: %pM"),
+		req.vdev_id, req.transaction_id, req.channel,
 		req.service_instance_id, req.ndp_info.ndp_app_info_len,
 		req.ncs_sk_type, req.peer_discovery_mac_addr.bytes);
 	status = sme_ndp_initiator_req_handler(hal, &req);
@@ -1769,6 +1775,12 @@ static void hdd_ndp_end_ind_handler(hdd_adapter_t *adapter,
 			continue;
 		}
 		ndp_ctx = WLAN_HDD_GET_NDP_CTX_PTR(ndi_adapter);
+		if (!ndp_ctx) {
+			hddLog(LOGE,
+			FL("ndp_ctx is NULL for vdev id: %d"),
+			end_ind->ndp_map[i].vdev_id);
+			continue;
+		}
 		idx = hdd_get_peer_idx(sta_ctx,
 				&end_ind->ndp_map[i].peer_ndi_mac_addr);
 		if (idx == INVALID_PEER_IDX) {
@@ -2022,6 +2034,15 @@ int hdd_init_nan_data_mode(struct hdd_adapter_s *adapter)
 		goto error_sme_open;
 	}
 
+	ret_val = process_wma_set_command((int)adapter->sessionId,
+			(int)WMI_PDEV_PARAM_BURST_ENABLE,
+			(int)hdd_ctx->cfg_ini->enableSifsBurst,
+			PDEV_CMD);
+	if (0 != ret_val) {
+		hddLog(LOGE, FL("WMI_PDEV_PARAM_BURST_ENABLE set failed %d"),
+				ret_val);
+	}
+
 	/* open sme session for future use */
 	hal_status = sme_OpenSession(hdd_ctx->hHal, hdd_smeRoamCallback,
 			adapter, (uint8_t *)&adapter->macAddressCurrent,
@@ -2072,15 +2093,6 @@ int hdd_init_nan_data_mode(struct hdd_adapter_s *adapter)
 	}
 
 	set_bit(WMM_INIT_DONE, &adapter->event_flags);
-
-	ret_val = process_wma_set_command((int)adapter->sessionId,
-			(int)WMI_PDEV_PARAM_BURST_ENABLE,
-			(int)hdd_ctx->cfg_ini->enableSifsBurst,
-			PDEV_CMD);
-	if (0 != ret_val) {
-		hddLog(LOGE, FL("WMI_PDEV_PARAM_BURST_ENABLE set failed %d"),
-				ret_val);
-	}
 
 	ndp_ctx->state = NAN_DATA_NDI_CREATING_STATE;
 	return ret_val;
