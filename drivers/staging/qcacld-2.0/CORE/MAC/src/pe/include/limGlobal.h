@@ -45,7 +45,7 @@
 #include "sirMacPropExts.h"
 #include "sirCommon.h"
 #include "sirDebug.h"
-#include "wniCfgSta.h"
+#include "wni_cfg.h"
 #include "csrApi.h"
 #include "sapApi.h"
 #include "dot11f.h"
@@ -53,10 +53,6 @@
 
 /// Maximum number of scan hash table entries
 #define LIM_MAX_NUM_OF_SCAN_RESULTS 256
-
-// Sending Disassociate frames threshold
-#define LIM_SEND_DISASSOC_FRAME_THRESHOLD       2
-#define LIM_HASH_MISS_TIMER_MS                  10000
 
 // Deferred Message Queue Length
 #define MAX_DEFERRED_QUEUE_LEN                  80
@@ -72,7 +68,11 @@
 #define IS_5G_BAND(__rfBand)     ((__rfBand & 0x3) == 0x2)
 #define IS_24G_BAND(__rfBand)    ((__rfBand & 0x3) == 0x1)
 
-#define LIM_MAX_CSA_IE_UPDATES                  ( 5 )
+#ifdef CHANNEL_HOPPING_ALL_BANDS
+#define CHAN_HOP_ALL_BANDS_ENABLE        1
+#else
+#define CHAN_HOP_ALL_BANDS_ENABLE        0
+#endif
 
 // enums exported by LIM are as follows
 
@@ -317,7 +317,7 @@ struct tLimScanResultNode
 typedef struct sLimMlmOemDataReq
 {
     tSirMacAddr           selfMacAddr;
-    uint32_t               data_len;
+    uint32_t              data_len;
     uint8_t               *data;
 } tLimMlmOemDataReq, *tpLimMlmOemDataReq;
 

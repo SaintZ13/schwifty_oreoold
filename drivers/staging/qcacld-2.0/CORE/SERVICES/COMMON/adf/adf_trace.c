@@ -458,7 +458,8 @@ void adf_dp_add_record(enum ADF_DP_TRACE_ID code,
 	rec->pid = (in_interrupt() ? 0 : current->pid);
 	spin_unlock_bh(&l_dp_trace_lock);
 
-	if (g_adf_dp_trace_data.live_mode || print == true)
+	if ((g_adf_dp_trace_data.live_mode || print == true) &&
+	    (rec->code < ADF_DP_TRACE_MAX))
 		adf_dp_trace_cb_table[rec->code] (rec, index);
 }
 
@@ -773,6 +774,10 @@ void adf_dp_trace_ptr(adf_nbuf_t nbuf, enum ADF_DP_TRACE_ID code,
 void adf_dp_display_record(struct adf_dp_trace_record_s *pRecord,
 				uint16_t recIndex)
 {
+	uint8_t rsize = pRecord->size;
+	if (rsize > ADF_DP_TRACE_RECORD_SIZE)
+		rsize = ADF_DP_TRACE_RECORD_SIZE;
+
 	DPTRACE_PRINT("DPT: %04d: %s: %s\n", recIndex,
 		pRecord->time, adf_dp_code_to_string(pRecord->code));
 	switch (pRecord->code) {
@@ -784,10 +789,10 @@ void adf_dp_display_record(struct adf_dp_trace_record_s *pRecord,
 		break;
 	case ADF_DP_TRACE_HDD_TX_PACKET_RECORD:
 	case ADF_DP_TRACE_HDD_RX_PACKET_RECORD:
-		dump_hex_trace("DATA", pRecord->data, pRecord->size);
+		dump_hex_trace("DATA", pRecord->data, rsize);
 		break;
 	default:
-		dump_hex_trace("cookie", pRecord->data, pRecord->size);
+		dump_hex_trace("cookie", pRecord->data, rsize);
 	}
 }
 
@@ -808,7 +813,7 @@ void adf_dp_trace(adf_nbuf_t nbuf, enum ADF_DP_TRACE_ID code,
 		return;
 
 	adf_dp_add_record(code, data, size,
-				ADF_NBUF_CB_DP_TRACE_PRINT(nbuf));
+			nbuf ? ADF_NBUF_CB_DP_TRACE_PRINT(nbuf) : false);
 }
 
 /**

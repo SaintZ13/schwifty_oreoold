@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014, 2016-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014, 2016 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -94,16 +94,16 @@ limProcessDeauthFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tpPESession p
          (eLIM_SME_WT_DEAUTH_STATE == psessionEntry->limSmeState)))
     {
         /*Every 15th deauth frame will be logged in kmsg*/
-        if(!(psessionEntry->deauthmsgcnt & 0xF))
+        if(!(pMac->lim.deauthMsgCnt & 0xF))
         {
-            limLog(pMac, LOGE,
+            PELOGE(limLog(pMac, LOGE,
              FL("received Deauth frame in DEAUTH_WT_STATE"
              "(already processing previously received DEAUTH frame).."
-             "Dropping this.. Deauth Failed %d"),++psessionEntry->deauthmsgcnt);
+             "Dropping this.. Deauth Failed %d"),++pMac->lim.deauthMsgCnt);)
         }
         else
         {
-            psessionEntry->deauthmsgcnt++;
+            pMac->lim.deauthMsgCnt++;
         }
         return;
     }
@@ -246,10 +246,11 @@ limProcessDeauthFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tpPESession p
      *     AP we're currently associated with (case a), then proceed
      *     with normal deauth processing.
      */
-    if ( psessionEntry->limReAssocbssId!=NULL )
-    {
-        pRoamSessionEntry = peFindSessionByBssid(pMac, psessionEntry->limReAssocbssId, &roamSessionId);
-    }
+
+    pRoamSessionEntry =
+        peFindSessionByBssid(pMac, psessionEntry->limReAssocbssId,
+                                                    &roamSessionId);
+
     if (limIsReassocInProgress(pMac,psessionEntry) || limIsReassocInProgress(pMac,pRoamSessionEntry)) {
         if (!IS_REASSOC_BSSID(pMac,pHdr->sa,psessionEntry)) {
             PELOGE(limLog(pMac, LOGE, FL("Rcv Deauth from unknown/different "
@@ -534,21 +535,20 @@ limProcessDeauthFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tpPESession p
                eSIR_MAC_UNSPEC_FAILURE_STATUS, psessionEntry);
         return;
     }
-
-    /*
-     * reset the deauthMsgCnt here since we are able to Process
-     * the deauth frame and sending up the indication as well
-     */
-    if (psessionEntry->deauthmsgcnt != 0)
-        psessionEntry->deauthmsgcnt = 0;
-
+    /* reset the deauthMsgCnt here since we are able to Process
+     * the deauth frame and sending up the indication as well */
+    if(pMac->lim.deauthMsgCnt != 0)
+    {
+        pMac->lim.deauthMsgCnt = 0;
+    }
     if (LIM_IS_STA_ROLE(psessionEntry))
         WDA_TxAbort(psessionEntry->smeSessionId);
 
     lim_update_lost_link_info(pMac, psessionEntry, frame_rssi);
 
     /// Deauthentication from peer MAC entity
-    limPostSmeMessage(pMac, LIM_MLM_DEAUTH_IND, (tANI_U32 *) &mlmDeauthInd);
+    if (GET_LIM_SYSTEM_ROLE(psessionEntry) == eLIM_STA_ROLE)
+        limPostSmeMessage(pMac, LIM_MLM_DEAUTH_IND, (tANI_U32 *) &mlmDeauthInd);
 
     // send eWNI_SME_DEAUTH_IND to SME
     limSendSmeDeauthInd(pMac, pStaDs, psessionEntry);

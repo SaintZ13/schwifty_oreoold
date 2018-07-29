@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2015 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -290,6 +290,12 @@ limGetBssDescription( tpAniSirGlobal pMac, tSirBssDescription *pBssDescription,
     pBssDescription->tsf_delta = limGetU32(pBuf);
     pBuf += sizeof(tANI_U32);
     len  -= sizeof(tANI_U32);
+
+#ifdef WLAN_FEATURE_FILS_SK
+    vos_mem_copy(&pBssDescription->fils_info_element, pBuf, sizeof(struct fils_ind_elements));
+    pBuf += sizeof(struct fils_ind_elements);
+    len -= sizeof(struct fils_ind_elements);
+#endif
 
     if (len > 0)
     {
@@ -695,7 +701,16 @@ limStartBssReqSerDes(tpAniSirGlobal pMac, tpSirSmeStartBssReq pStartBssReq, tANI
     len--;
 
     /* extract vendor_vht_for_24ghz_sap */
-    pStartBssReq->vendor_vht_for_24ghz_sap = *pBuf++;
+    pStartBssReq->vendor_vht_for_24ghz_sap = *pBuf;
+    len -= sizeof(pStartBssReq->vendor_vht_for_24ghz_sap);
+    pBuf += sizeof(pStartBssReq->vendor_vht_for_24ghz_sap);
+
+    vos_mem_copy(&(pStartBssReq->beacon_tx_rate), pBuf,
+            sizeof(pStartBssReq->beacon_tx_rate));
+    len -= sizeof(pStartBssReq->beacon_tx_rate);
+    pBuf += sizeof(pStartBssReq->beacon_tx_rate);
+
+    pStartBssReq->sub20_channelwidth = *pBuf++;
     len--;
 
     if (len)
@@ -951,6 +966,14 @@ limJoinReqSerDes(tpAniSirGlobal pMac, tpSirSmeJoinReq pJoinReq, tANI_U8 *pBuf)
     pBuf += sizeof(ePhyChanBondState);
     len -= sizeof(ePhyChanBondState);
 
+    if (limCheckRemainingLength(pMac, len) == eSIR_FAILURE)
+    {
+        limLog(pMac, LOGE, FL("remaining len %d is too short"), len);
+        return eSIR_FAILURE;
+    }
+    /* Extract force_24ghz_in_ht20 */
+    pJoinReq->force_24ghz_in_ht20 = *pBuf++;
+    len--;
     if (limCheckRemainingLength(pMac, len) == eSIR_FAILURE)
     {
         limLog(pMac, LOGE, FL("remaining len %d is too short"), len);
@@ -1328,6 +1351,17 @@ limJoinReqSerDes(tpAniSirGlobal pMac, tpSirSmeJoinReq pJoinReq, tANI_U8 *pBuf)
             pJoinReq->powerCap.minTxPower,
             pJoinReq->powerCap.maxTxPower,
             pJoinReq->supportedChannels.numChnl);)
+
+    if (pJoinReq->messageType == eWNI_SME_JOIN_REQ)
+    {
+        pJoinReq->sub20_channelwidth = *pBuf++;
+        len--;
+    }
+#ifdef WLAN_FEATURE_FILS_SK
+    vos_mem_copy(&pJoinReq->fils_con_info, pBuf, sizeof(struct cds_fils_connection_info));
+    pBuf += sizeof(struct cds_fils_connection_info);
+    len -= sizeof(struct cds_fils_connection_info);
+#endif
 
     // Extract uapsdPerAcBitmask
     pJoinReq->uapsdPerAcBitmask = *pBuf++;
