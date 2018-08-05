@@ -17,7 +17,7 @@
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/slab.h>
-#include <linux/state_notifier.h>
+#include <linux/display_state.h>
 
 #define MAPLE_IOSCHED_PATCHLEVEL	(8)
 
