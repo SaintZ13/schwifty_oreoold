@@ -1,7 +1,7 @@
 export KBUILD_BUILD_USER=SaintZ93
 export KBUILD_BUILD_HOST=hidden
 export ARCH=arm64
-export CROSS_COMPILE=$HOME/gcc/bin/aarch64-linux-android-
+export CROSS_COMPILE=$HOME/buildgcc/aarch64-linux-gnu/bin/aarch64-linux-gnu-
 
 DIR=$(pwd)
 BUILD="$DIR/build"
@@ -29,9 +29,9 @@ make O="$BUILD" -j$NPR
 #rm $BUILD/lib/modules/*/source
 
 #mkdir -p $OUT/modules
-mv "$BUILD/arch/arm64/boot/Image.gz-dtb" "$OUT/Image.gz-dtb"
+#mv "$BUILD/arch/arm64/boot/Image.gz-dtb" "$OUT/Image.gz-dtb"
 #find "$BUILD/lib/modules/" -name *.ko | xargs -n 1 -I '{}' mv {} "$OUT/modules"
 
-echo "Image.gz-dtb and modules can be found in $OUT"
+echo "Image.gz-dtb and modules can be found in $BUILD"
 
 
